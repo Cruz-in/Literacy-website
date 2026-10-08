@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Imagery — a walk through the forest at dusk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@144,200..300,100&family=Jost:wght@200;300;400&family=Playfair+Display:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="particles.js" defer></script>
+    <script>
+        document.documentElement.classList.add("js");
+
+        // Loading screen: count eases to 90, waits for window load, then snaps
+        // to 100 and the panel wipes up. Feels like real progress without
+        // wiring up asset tracking. Runs on DOMContentLoaded so #loader exists.
+        addEventListener("DOMContentLoaded", () => {
+            const loader = document.getElementById("loader");
+            const pctEl = loader.querySelector(".pct");
+            let pct = 0, loaded = document.readyState === "complete";
+            addEventListener("load", () => loaded = true);
+            const tick = () => {
+                const target = loaded ? 100 : 90;
+                pct += Math.max(0.6, (target - pct) * 0.07);   // ease in, slows near the target
+                if (pct >= 100) {
+                    pctEl.textContent = 100;
+                    loader.classList.add("done");
+                    return;
+                }
+                pctEl.textContent = Math.round(pct);
+                requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+        });
+
+        addEventListener("DOMContentLoaded", () => {
+            const root = document.documentElement;
+            const still = matchMedia("(prefers-reduced-motion: reduce)");
+
+            // Sense labels arrive letter by letter, sensory lines word by
+            // word. The stagger itself is in the CSS (--i), so reduced
+            // motion skips it. aria-label keeps the label one word to a
+            // screen reader instead of five letters.
+            const split = (el, parts, join) => {
+                // only the heading needs it: five one-letter spans would be
+                // read out "S, I, G, H, T". Split words read normally, and
+                // aria-label on a <p> is ignored anyway.
+                if (el.tagName === "H2") el.ariaLabel = el.textContent;
+                el.replaceChildren(...parts.flatMap((part, i) => {
+                    const s = document.createElement("span");
+                    s.textContent = part;
+                    s.style.setProperty("--i", i);
+                    return i ? [join, s] : [s];
+                }));
+            };
+            for (const h of document.querySelectorAll(".sense > h2")) split(h, [...h.textContent], "");
+            for (const p of document.querySelectorAll(".sense > p")) split(p, p.textContent.split(" "), " ");
+
+            // "01 — Sight" ticks up to its number on arrival, one step every
+            // ~0.26s, so later sections take a beat longer to land.
+            const tick = (el) => {
+                const n = parseInt(el.textContent), rest = el.textContent.replace(/^\d+/, "");
+                const t0 = performance.now();
+                const step = (t) => {
+                    const i = Math.min(n, Math.floor((t - t0) / 260));
+                    el.textContent = String(i).padStart(2, "0") + rest;
+                    if (i < n) requestAnimationFrame(step);
+                };
+                requestAnimationFrame(step);
+            };
+
+            const io = new IntersectionObserver((entries) => {
+                for (const { target, intersectionRatio } of entries) {
+                    const seen = intersectionRatio >= 0.2;
+                    if (target.tagName === "SECTION") {
+                        target.classList.toggle("in", seen);   // photos re-bloom on the way back up
+                    } else if (seen) {
+                        target.classList.add("in");            // text reveals once
+                        if (target.classList.contains("count") && !still.matches) tick(target);
+                        io.unobserve(target);
+                    }
+                }
+            }, { threshold: 0.2 });
+            document.querySelectorAll("section, section > *").forEach((el) => io.observe(el));
+
+            // journey rail: one dot per section, the one you're in lit. It's
+            // navigation only now — the thread below carries the progress, and
+            // under 900px the rail is the page's only nav.
+            const rail = document.createElement("nav");
+            rail.className = "rail";
+            rail.ariaLabel = "Journey";
+            const dots = new Map();
+            for (const s of document.querySelectorAll("section")) {
+                const a = rail.appendChild(document.createElement("a"));
+                a.href = "#" + s.id;
+                a.title = a.ariaLabel = s.querySelector("h1, h2").textContent;
+                dots.set(s, a);
+            }
+            document.body.append(rail);
+
+            // the current section is whichever one crosses the middle of the screen
+            const here = new IntersectionObserver((entries) => {
+                for (const { target, isIntersecting } of entries) {
+                    if (!isIntersecting) continue;
+                    for (const a of dots.values()) a.removeAttribute("aria-current");
+                    dots.get(target).setAttribute("aria-current", "true");
+                    align?.(target);   // draw the thread to the section now crossing mid-screen
+                }
+            }, { rootMargin: "-50% 0px -50% 0px" });
+            dots.forEach((_, s) => here.observe(s));
+
+            // =========================================================
+            // THE JOURNEY THREAD — one line winding the whole page,
+            // drawn behind you as you walk it, with a firefly at its
+            // leading edge. The waypoints come from where the text
+            // actually lands, so a resize re-weaves it instead of
+            // breaking it. z 2 (CSS): over the photos, under the words.
+            // =========================================================
+            const thread = document.body.appendChild(document.createElement("div"));
+            thread.className = "thread";
+            thread.ariaHidden = "true";
+            thread.innerHTML =
+                `<svg xmlns="http://www.w3.org/2000/svg">
+                   <path class="ahead"/><path class="walked bloom"/><path class="walked"/>
+                 </svg><i></i>`;
+            const svg = thread.querySelector("svg");
+            const lines = thread.querySelectorAll("path");
+            const firefly = thread.querySelector("i");
+
+            // offsetTop/offsetLeft, not getBoundingClientRect: the reveal
+            // translates every section child 2.5rem and Taste's label -50%,
+            // and a rect would measure the animation instead of the layout.
+            const box = (el) => {
+                let x = 0, y = 0;
+                for (let n = el; n; n = n.offsetParent) { x += n.offsetLeft; y += n.offsetTop; }
+                return { x, y, w: el.offsetWidth, h: el.offsetHeight };
+            };
+
+            // What the thread is woven through, and what it has to keep off.
+            // The counters are only in the second list: they're 0.75rem labels
+            // sitting in a section's top padding, and anchoring to one boxes the
+            // thread into the wrong lane 10px above a quote it then has to cross
+            // — worth avoiding, not worth visiting.
+            const KEY = ":scope > h1, :scope > h2, :scope > p, :scope > blockquote, :scope > ul, :scope > a";
+            const BLOCKS = "h1, h2, p, blockquote, ul, a, .count";
+            const PAD = 30;      // clearance from a block of text
+            const MARGIN = 72;   // a margin narrower than this isn't worth walking in
+            const EDGE_R = 28;   // clear of the scrollbar
+            // the rail's dots own their lane in the left gutter; the thread
+            // starts outside it, which is also why it crosses to the right of
+            // anything hung on the left gutter rather than squeezing past
+            const edgeL = () => Math.round(rail.getBoundingClientRect().right) + 10;
+
+            // One waypoint per key element, out in the margin beside it, so the
+            // thread runs through the empty space next to the words and never
+            // over them.
+            //
+            // Two rules keep it a trail rather than a zigzag. It stays in the
+            // margin it's already walking and only crosses the page where an
+            // element leaves it no room there — so the crossings left are the
+            // ones the layout forces, which is exactly where the content
+            // changes sides (Sight's quote hangs right, Sound's hangs left),
+            // and they happen in the gap between two blocks. And inside that
+            // margin it leans alternately nearer the text and nearer the page
+            // edge, which is the gentle side-to-side.
+            const weave = (W, H) => {
+                const left = edgeL();
+
+                // Every block of text on the page, once. The 28vw sense labels
+                // are left out: they bleed off both edges, so there is no
+                // "beside" them, and a hairline crossing one of those is not
+                // what hurts to read.
+                const blocks = [...document.querySelectorAll("section > *")]
+                    .filter((el) => el.matches(BLOCKS) &&
+                                    !(el.tagName === "H2" && el.closest(".sense")))
+                    .map(box)
+                    .sort((a, b) => a.y - b.y);
+
+                // The clear stretches of the row at y, left to right. Checking
+                // the whole row and not one element at a time is what keeps the
+                // thread out of a block's neighbour — the hero's hook and its
+                // facts share a row, and "to the right of the hook" is on top
+                // of the facts.
+                const gaps = (y) => {
+                    const out = [];
+                    let at = left;
+                    for (const b of blocks
+                        .filter((b) => y > b.y - PAD && y < b.y + b.h + PAD)
+                        .sort((a, b) => a.x - b.x)) {
+                        if (b.x - PAD > at) out.push([at, b.x - PAD]);
+                        at = Math.max(at, b.x + b.w + PAD);
+                    }
+                    if (at < W - EDGE_R) out.push([at, W - EDGE_R]);
+                    return out.filter(([a, b]) => b - a >= MARGIN);
+                };
+
+                // Pick the gap nearest the lane we're already walking, then lean
+                // SWAY to one side of it. The nearest gap is what makes the
+                // thread cross the page only where the content does, and
+                // measuring from where the line already is, rather than from the
+                // gap's middle, is what keeps it from swinging the full width of
+                // an empty row and back.
+                //
+                // The lean is a slow sine of how far down the page we are, not a
+                // flip at each anchor: that way two anchors close together lean
+                // the same way and the line bends once between them instead of
+                // zigzagging. One wave is ~2500px, so the whole walk sways about
+                // three times — a trail, not a corrugation.
+                const SWAY = 110;
+                const place = (free, fromX, y) => {
+                    const [lo, hi] = free.reduce((a, g) =>
+                        Math.max(a[0] - fromX, fromX - a[1]) <= Math.max(g[0] - fromX, fromX - g[1]) ? a : g);
+                    const lean = Math.sin(y / 400);
+                    return clamp(clamp(fromX, lo, hi) + lean * SWAY, lo + 22, hi - 22);   // 22: the curve bulges off its chord
+                };
+
+                // The elements in the order you actually walk past them. Document
+                // order isn't it: Touch's and Taste's quotes sit above their
+                // labels, and every counter is its section's last child but the
+                // first thing you reach.
+                const walked = [...document.querySelectorAll("section")]
+                    .flatMap((s) => [...s.querySelectorAll(KEY)].map(box))
+                    .sort((a, b) => (a.y + a.h / 2) - (b.y + b.h / 2));
+
+                // Does the straight run from a to (bx, by) pass through block k?
+                // Exact for the chord, because the run only ever descends: the x
+                // it has at the top and bottom of k's rows bounds every x in
+                // between. SLACK is generous — the curve bulges off its chord, so
+                // a near miss here is a graze on the page.
+                const SLACK = PAD * 0.8;
+                const cuts = (a, bx, by, k) => {
+                    const t0 = Math.max(a.y, k.y - SLACK), t1 = Math.min(by, k.y + k.h + SLACK);
+                    if (t0 >= t1 || by <= a.y) return false;
+                    const at = (t) => a.x + (bx - a.x) * (t - a.y) / (by - a.y);
+                    const [x0, x1] = [at(t0), at(t1)].sort((m, n) => m - n);
+                    return x1 > k.x - SLACK && x0 < k.x + k.w + SLACK;
+                };
+
+                const pts = [{ x: W * 0.44, y: 0 }];
+
+                // Add a waypoint — but a change of lane has to finish before the
+                // next block's row begins, or the line clips its corner on the
+                // way across. So if the run from here to there would cut
+                // something, get across in the clear band above it first and then
+                // run down past it.
+                const step = (x, y) => {
+                    const last = pts[pts.length - 1];
+                    const hit = blocks.find((k) => cuts(last, x, y, k));
+                    const band = hit && hit.y - PAD;
+                    const fits = (at) => gaps(at).some(([lo, hi]) => x >= lo && x <= hi);
+                    if (hit && band - last.y > 40 && fits(band)) pts.push({ x, y: band });
+                    // no clear band to get across in — Touch's counter hangs right
+                    // and its quote hangs left, 100px apart. Slide the waypoint
+                    // we came from into this lane instead, if its own row allows
+                    // it, and then there's no crossing left to make.
+                    // ...or, if there's no clear band, slide the waypoint we came
+                    // from into this lane, so there's no crossing left to make —
+                    // but only if the run INTO it stays clear, since that run was
+                    // checked against where it used to be.
+                    else if (hit && fits(last.y) &&
+                             !blocks.some((k) => cuts(pts[pts.length - 2] || last, x, last.y, k)))
+                        last.x = x;
+                    // we're already level with it: carry on down in the lane
+                    // we're in until we're clear of its foot, and cross under it
+                    else if (hit && hit.y + hit.h + PAD < y - 20)
+                        pts.push({ x: last.x, y: hit.y + hit.h + PAD });
+                    pts.push({ x, y });
+                };
+
+                for (const b of walked) {
+                    const last = pts[pts.length - 1];
+                    let y = b.y + b.h / 2;
+                    if (y - last.y < innerHeight * 0.16) continue;   // too close to bend between
+                    // beside it if the row has room; otherwise through the empty
+                    // band just above it (a phone has no margins to walk in, and
+                    // neither does a full-bleed block)
+                    let free = gaps(y);
+                    if (!free.length && b.y - PAD - last.y > 48) free = gaps(y = b.y - PAD);
+                    if (free.length) step(place(free, last.x, y), y);
+                }
+                pts.push({ x: pts[pts.length - 1].x, y: H });
+
+                // a long run with nothing beside it gets one bend at its middle
+                for (let i = pts.length - 1; i > 0; i--) {
+                    const a = pts[i - 1], b = pts[i];
+                    const y = (a.y + b.y) / 2;
+                    if (b.y - a.y < innerHeight * 0.55) continue;
+                    const free = gaps(y);
+                    const x = free.length && place(free, (a.x + b.x) / 2, y);
+                    if (free.length && !blocks.some((k) => cuts(a, x, y, k) || cuts({ x, y }, b.x, b.y, k)))
+                        pts.splice(i, 0, { x, y });
+                }
+                return pts;
+            };
+
+            const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+            // Catmull-Rom through the waypoints, one cubic per gap. The tension
+            // is low enough that the curve never doubles back up the page, which
+            // the length→y lookup below depends on.
+            const curve = (p) => {
+                let d = `M${p[0].x.toFixed(1)} ${p[0].y.toFixed(1)}`;
+                for (let i = 0; i < p.length - 1; i++) {
+                    const a = p[i - 1] || p[i], b = p[i], c = p[i + 1], e = p[i + 2] || p[i + 1], t = 0.11;
+                    d += `C${(b.x + (c.x - a.x) * t).toFixed(1)} ${(b.y + (c.y - a.y) * t).toFixed(1)}`
+                       + ` ${(c.x - (e.x - b.x) * t).toFixed(1)} ${(c.y - (e.y - b.y) * t).toFixed(1)}`
+                       + ` ${c.x.toFixed(1)} ${c.y.toFixed(1)}`;
+                }
+                return d;
+            };
+
+            // length → position, sampled once per build. The scroll handler then
+            // needs no geometry calls at all, just a lookup in these two arrays.
+            const STEPS = 320;
+            let xs = [], ys = [];
+
+            const build = () => {
+                const W = document.documentElement.clientWidth;
+                const H = document.documentElement.scrollHeight;
+                // Under ~1000px there is nothing to weave through: every block runs
+                // the full width of the page, so a thread could only cross them.
+                // The rail's dots are the wayfinding at that width, which is
+                // already what they're there for (the hero's nav is hidden too).
+                thread.hidden = W < 980;
+                if (thread.hidden) { xs = ys = []; return; }
+                const d = curve(weave(W, H));
+                svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+                svg.setAttribute("width", W);
+                svg.setAttribute("height", H);
+                for (const path of lines) path.setAttribute("d", d);
+                // the firefly rides the real curve (same --p as the stroke), so
+                // it stays pinned to the drawn tip instead of cutting the corner
+                firefly.style.offsetPath = `path("${d}")`;
+
+                const total = lines[0].getTotalLength();
+                thread.style.setProperty("--len", total.toFixed(1) + "px");
+                xs = []; ys = [];
+                for (let i = 0; i <= STEPS; i++) {
+                    const pt = lines[0].getPointAtLength(total * i / STEPS);
+                    xs.push(pt.x);
+                    ys.push(i ? Math.max(ys[i - 1], pt.y) : pt.y);   // monotonic: the lookup binary-searches it
+                }
+                align(current);   // re-anchor to the section you're in after a re-weave
+            };
+
+            // Where a document-space y sits on the thread: the fraction drawn,
+            // and the head's x there. Same binary search the build leaves ready
+            // in xs/ys — no geometry calls.
+            const pAt = (y) => {
+                y = clamp(y, ys[0], ys[STEPS]);
+                let lo = 0, hi = STEPS;
+                while (hi - lo > 1) {
+                    const m = (lo + hi) >> 1;
+                    if (ys[m] > y) hi = m; else lo = m;
+                }
+                const f = clamp((y - ys[lo]) / ((ys[hi] - ys[lo]) || 1), 0, 1);
+                return { p: (lo + f) / STEPS, x: xs[lo] + (xs[hi] - xs[lo]) * f, y };
+            };
+
+            // The thread no longer chases the scrollbar frame by frame — that
+            // was the choppy part. Instead each section's reveal snaps it to the
+            // foot of that section, and a CSS transition eases the line and the
+            // firefly there. Smooth, and nothing runs between sections.
+            let current = null;
+            const HEAD = 0.75;   // where the head rests in the viewport: 0.5 = middle, 0.75 = a quarter up from the bottom
+            const align = (s) => {
+                current = s;
+                if (!s || !ys.length) return;
+                // sight's thread runs behind its text at the usual spot, so drop
+                // its head further down the viewport until it clears
+                const head = HEAD + (s.id === "sight" ? 0.2 : 0);
+                const t = pAt(scrollY + innerHeight * head);   // rest the head at a fixed spot in the viewport
+                thread.style.setProperty("--p", t.p.toFixed(4));   // drives both the stroke and the firefly's offset-distance
+            };
+
+            // Going down, section reveals step the thread forward (smooth,
+            // stepped). Going back up, follow the scroll so the head retreats
+            // with you at once instead of waiting for the section above to
+            // reach mid-screen — the thread's anchor is the viewport, so
+            // re-aligning just pulls the head up to where you now are.
+            let prevScrollY = scrollY, queuedUp = false;
+            addEventListener("scroll", () => {
+                const up = scrollY < prevScrollY;
+                prevScrollY = scrollY;
+                if (!up || queuedUp) return;
+                queuedUp = true;
+                requestAnimationFrame(() => { queuedUp = false; align(current); });
+            }, { passive: true });
+
+            // re-weave when the layout can have moved under it
+            let rebuild;
+            addEventListener("resize", () => {
+                clearTimeout(rebuild);
+                rebuild = setTimeout(build, 160);
+            }, { passive: true });
+            build();
+            document.fonts?.ready.then(build);   // Fraunces and Jost shift every height
+
+            // floating dust over the whole page: particles.js defaults.
+            // Appended before the grain, so the grain lies over the motes too.
+            const dust = document.body.appendChild(document.createElement("canvas"));
+            dust.className = "motes";
+            dust.ariaHidden = "true";
+            particles(dust);
+
+            // SIGHT: gold dust caught in the god-rays. Larger, warmer and
+            // brighter than the page dust, and twinkling. The canvas's CSS
+            // mask keeps it inside the fan of light.
+            particles(document.querySelector("#sight .light-motes"), {
+                count: 140,         // the mask hides most of them at any moment
+                stillCount: 30,
+                size: [2, 4],
+                opacity: [0.5, 1],
+                speed: 6,
+                drift: [1, 0.55],   // out from the sun, along the rays
+                wander: 1,          // a lazy swirl, the way dust hangs in light
+                twinkle: 0.45,
+                color: "255, 206, 136",
+            });
+
+            // SMELL: pollen and spores lifting on the cooling air. Paler,
+            // smaller, slower and fainter than SIGHT's gold dust.
+            particles(document.querySelector("#smell .spores"), {
+                count: 45,
+                stillCount: 8,
+                size: [1, 2.5],
+                opacity: [0.06, 0.3],
+                speed: 7,
+                drift: [0.2, -1],   // up, with the faint lean of the fog's breeze
+                wander: 1.3,        // spores tumble more than they climb
+                twinkle: 0.25,
+                color: "222, 236, 212",
+            });
+
+            // TASTE: the shimmer riding over the aurora. The fewest, faintest
+            // motes on the page, twinkling hard and barely drifting — the
+            // taste of rain on the air, not weather.
+            particles(document.querySelector("#taste .shimmer"), {
+                count: 34,
+                stillCount: 10,
+                size: [1, 2],
+                opacity: [0.05, 0.28],
+                speed: 4,
+                drift: [-0.3, -1],
+                wander: 1.6,
+                twinkle: 0.6,
+                color: "255, 208, 220",
+            });
+
+            // Fireflies over the dusk half of the walk. The same module as the
+            // page dust: far fewer, warmer, pulsing hard and wandering more than
+            // they travel — and they ease out of the way of the pointer. Each
+            // canvas pauses itself off-screen.
+            for (const [id, count] of [["hero", 22], ["sight", 12], ["sound", 18], ["smell", 16]]) {
+                particles(document.querySelector(`#${id} .fireflies`), {
+                    count,              // sight is lowest: its god-rays already carry gold dust
+                    stillCount: 5,      // reduced motion: a few still lights
+                    size: [2, 3.6],
+                    opacity: [0.3, 0.95],   /* the twinkle dips to a quarter of this */
+                    speed: 9,
+                    drift: [0.5, -0.4],
+                    wander: 2.6,        // they wander far more than they travel
+                    twinkle: 0.75,      // the slow pulse is the whole tell
+                    color: "255, 224, 138",
+                    repel: 110,
+                });
+            }
+
+            // film grain: one tile of noise drawn once, then jumped to a random
+            // offset each frame, so only a transform changes (compositor-only).
+            // Light and dark specks, most faint, a few bright: no grey haze.
+            const tile = 256, dpr = devicePixelRatio || 1, size = tile / dpr;   // 1 speck = 1 device pixel
+            const canvas = document.createElement("canvas");
+            canvas.width = canvas.height = tile;
+            const ctx = canvas.getContext("2d");
+            const noise = ctx.createImageData(tile, tile);
+            for (let i = 0; i < noise.data.length; i += 4) {
+                const v = Math.random() + Math.random() - 1;   // -1..1, clustered near 0
+                noise.data[i] = noise.data[i + 1] = noise.data[i + 2] = v > 0 ? 255 : 0;
+                noise.data[i + 3] = Math.abs(v) * 255;
+            }
+            ctx.putImageData(noise, 0, 0);
+            const grain = document.body.appendChild(document.createElement("div"));
+            grain.className = "grain";
+            grain.style.inset = -size + "px";   // a tile of slack on every side to jump into
+            grain.style.background = `url(${canvas.toDataURL()}) 0 0 / ${size}px`;
+
+            // ~24fps like film; reduced motion leaves it still (static grain)
+            const jump = () => Math.round((Math.random() * 2 - 1) * tile) / dpr;   // whole device pixels: no smear
+            let last = 0;
+            const shimmer = (t) => {
+                if (still.matches) return;
+                if (t - last > 40) {
+                    last = t;
+                    grain.style.transform = `translate3d(${jump()}px, ${jump()}px, 0)`;
+                }
+                requestAnimationFrame(shimmer);
+            };
+            requestAnimationFrame(shimmer);
+            still.addEventListener("change", () => requestAnimationFrame(shimmer));
+
+            // The pointer does two jobs, in one listener and one frame: a soft
+            // warm glow follows it, and the page's layers lean away from it
+            // (--mx/--my, -1..1 across the viewport; the CSS decides how far
+            // each depth moves). Mouse and pen only — a finger is scrolling —
+            // and nothing at all under reduced motion, so the vars stay 0.
+            const glow = document.body.insertBefore(document.createElement("div"), grain);
+            glow.className = "glow";
+            glow.ariaHidden = "true";
+            let px = 0, py = 0, queued = false;
+            const lean = () => {
+                queued = false;
+                glow.style.translate = `${px}px ${py}px`;
+                root.style.setProperty("--mx", (px / innerWidth * 2 - 1).toFixed(3));
+                root.style.setProperty("--my", (py / innerHeight * 2 - 1).toFixed(3));
+            };
+            addEventListener("pointermove", (e) => {
+                if (e.pointerType === "touch" || still.matches) return;
+                px = e.clientX;
+                py = e.clientY;
+                glow.style.opacity = "1";
+                if (!queued) {
+                    queued = true;
+                    requestAnimationFrame(lean);
+                }
+            }, { passive: true });
+
+            // TOUCH: the bark answers your hand. Moving the pointer over it
+            // spreads a soft ring from under the cursor (a pool of six,
+            // recycled), at most one per 200ms, and only if it moved. Mouse and pen only:
+            // a finger is scrolling, not touching. Nothing under reduced
+            // motion. No loop: the browser runs each ring (transform/opacity).
+            const touch = document.querySelector("#touch");
+            const rings = touch.querySelectorAll(".press i");
+            let ring = 0, lastX = -1e4, lastY = -1e4, lastT = -1e4;
+            touch.addEventListener("pointermove", (e) => {
+                if (e.pointerType === "touch" || still.matches) return;
+                const box = touch.getBoundingClientRect();
+                const x = e.clientX - box.left, y = e.clientY - box.top;
+                if (e.timeStamp - lastT < 200 || Math.hypot(x - lastX, y - lastY) < 12) return;
+                lastX = x; lastY = y; lastT = e.timeStamp;
+                const el = rings[ring++ % rings.length];
+                el.style.translate = `${x}px ${y}px`;
+                el.animate([
+                    { transform: "scale(0.15)", opacity: 0.9 },
+                    { transform: "scale(1)", opacity: 0 },
+                ], { duration: 1800, easing: "cubic-bezier(0.2, 0.6, 0.35, 1)" });
+            });
+        });
+    </script>
+</head>
+<body>
+
+    <!-- loading screen: solid ink, the word surfacing, a counter to 100,
+         then the panel wipes up to reveal the hero. Only shown with JS
+         (the <head> script adds .js before paint), so it can never stick. -->
+    <div id="loader" aria-hidden="true">
+        <span class="brand">imagery<i>.</i></span>
+        <span class="pct">0</span>
+    </div>
+
+    <!-- SECTION 1: HERO -->
+    <section id="hero">
+        <header class="topbar">
+            <p class="credit">Cruz · [Class]</p>
+            <nav aria-label="Sections">
+                <a href="#definition">Definition</a>
+                <a href="#sight">The senses</a>
+                <a href="#real-world-example">Frost</a>
+            </nav>
+        </header>
+        <h1>imagery<span class="dot">.</span></h1>
+        <!-- the treeline, cut from the same photo, stands in front of the title -->
+        <div class="ridge" aria-hidden="true"></div>
+        <p class="hook">Language you don’t just read — you feel.</p>
+        <ul class="facts">
+            <li><b>5</b> senses <br>to wake</li>
+            <li><b>1</b> trail <br>at dusk</li>
+            <li><b>6</b> stops <br>on the walk</li>
+        </ul>
+        <a class="scroll-cue" href="#definition"><span aria-hidden="true">↓</span> step inside</a>
+        <canvas class="fireflies" aria-hidden="true"></canvas>
+        <!-- one distant bird crosses the sky every ~26s -->
+        <div class="bird" aria-hidden="true"></div>
+    </section>
+
+    <!-- SECTION 2: DEFINITION -->
+    <section id="definition">
+        <h2>WHAT IS IMAGERY</h2>
+        <p>Imagery is descriptive language that pulls the five senses into writing. Instead of just telling you what happened, it lets you see the light, hear the quiet, and feel the cold — so the scene plays out in your head like a memory you actually lived.</p>
+    </section>
+
+    <!-- SECTION 3: THE FIVE SENSES -->
+    <div id="senses">
+
+        <section id="sight" class="sense">
+            <h2>SIGHT</h2>
+            <p>The last light breaks through the branches in thin gold lines, and the path ahead fades slowly into blue.</p>
+            <span class="count" aria-hidden="true">01 — Sight</span>
+            <div class="god-rays" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+            <canvas class="light-motes" aria-hidden="true"></canvas>
+            <canvas class="fireflies" aria-hidden="true"></canvas>
+        </section>
+
+        <section id="sound" class="sense">
+            <h2>SOUND</h2>
+            <p>Somewhere behind you a branch settles. Everything else has gone quiet enough to hear your own breathing.</p>
+            <span class="count" aria-hidden="true">02 — Sound</span>
+            <div class="hush" aria-hidden="true"></div>
+            <div class="ripples" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <canvas class="fireflies" aria-hidden="true"></canvas>
+        </section>
+
+        <section id="smell" class="sense">
+            <h2>SMELL</h2>
+            <p>Wet earth and pine hang in the cooling air, sharp and clean after the day’s heat.</p>
+            <span class="count" aria-hidden="true">03 — Smell</span>
+            <div class="fog" aria-hidden="true"><i></i><i></i><i></i></div>
+            <canvas class="spores" aria-hidden="true"></canvas>
+            <canvas class="fireflies" aria-hidden="true"></canvas>
+        </section>
+
+        <section id="touch" class="sense">
+            <h2>TOUCH</h2>
+            <p>The cold creeps in first at your fingertips, and the rough bark bites back when you reach out to steady yourself.</p>
+            <span class="count" aria-hidden="true">04 — Touch</span>
+            <div class="frost" aria-hidden="true"></div>
+            <div class="press" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </section>
+
+        <section id="taste" class="sense">
+            <h2>TASTE</h2>
+            <p>The air itself tastes faintly of rain, metallic and cool on the tip of your tongue.</p>
+            <span class="count" aria-hidden="true">05 — Taste</span>
+            <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+            <canvas class="shimmer" aria-hidden="true"></canvas>
+        </section>
+
+    </div>
+
+    <!-- SECTION 4: ORIGINAL EXAMPLE -->
+    <section id="original-example">
+        <h2>ORIGINAL EXAMPLE — written by Cruz</h2>
+        <p>The last light broke through the branches in thin gold lines before the path faded into blue. Behind me a single branch settled, and then it was quiet enough to hear my own breathing. Wet earth and pine hung in the cooling air, sharp and clean. The cold found my fingertips first, and the bark bit back rough against my hand as I steadied myself. On my tongue, faint and metallic, I could already taste the coming rain.</p>
+    </section>
+
+    <!-- SECTION 5: REAL-WORLD EXAMPLE -->
+    <section id="real-world-example">
+        <h2>REAL-WORLD EXAMPLE — how a poet does it</h2>
+        <blockquote>“The only other sound’s the sweep / Of easy wind and downy flake.”</blockquote>
+        <p class="citation">— Robert Frost, <cite>Stopping by Woods on a Snowy Evening</cite> (1923)</p>
+        <p class="analysis">Frost leans on sound and touch — the near-silence of the woods and the softness of falling snow — so you don’t just picture the scene, you feel how still it is.</p>
+    </section>
+
+    <!-- SECTION 6: CLOSING -->
+    <section id="closing">
+        <h2>That’s imagery — not describing a place, but letting you stand in it.</h2>
+        <p class="credit">Cruz · [Class] · [Date]</p>
+        <a class="scroll-cue" href="#hero"><span aria-hidden="true">↑</span> walk it again</a>
+    </section>
+
+</body>
+</html>
