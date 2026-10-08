@@ -187,6 +187,8 @@ section {
     z-index: 5;   /* over the title (4) */
     /* fades out at the foot: it sits over the film, so without the
        fade its grainless edge shows as a seam */
+    -webkit-mask: var(--ridge) center 60% / cover no-repeat,
+        linear-gradient(#000 80%, transparent);
     mask:
         var(--ridge) center 60% / cover no-repeat,
         linear-gradient(#000 80%, transparent);
@@ -444,6 +446,7 @@ section {
     white-space: nowrap;
     color: var(--world-label);
     margin-left: var(--bleed);
+    -webkit-user-select: none;
     user-select: none;
 }
 
@@ -494,6 +497,8 @@ section {
     width: 100%;
     height: calc(100% + 2 * var(--travel));   /* = the frame's spare, top and bottom */
     /* only inside the fan of light, thinning out with distance */
+    -webkit-mask-image: conic-gradient(at var(--sun-x) var(--sun-y), transparent 92deg, #000 102deg, #000 148deg, transparent 158deg),
+        radial-gradient(circle at var(--sun-x) var(--sun-y), #000 15%, transparent 55%);
     mask-image:
         conic-gradient(at var(--sun-x) var(--sun-y), transparent 92deg, #000 102deg, #000 148deg, transparent 158deg),
         radial-gradient(circle at var(--sun-x) var(--sun-y), #000 15%, transparent 55%);
@@ -513,6 +518,7 @@ section {
     transform: rotate(var(--r));
     opacity: var(--o);
     background: linear-gradient(90deg, rgb(255, 206, 134) 10%, rgba(255, 184, 100, 0.55) 55%, transparent);
+    -webkit-mask-image: linear-gradient(transparent, #000 40%, #000 60%, transparent);
     mask-image: linear-gradient(transparent, #000 40%, #000 60%, transparent);   /* soft sides */
     filter: blur(14px);
 }
@@ -609,7 +615,7 @@ section {
 }
 
 /* photo dissolves into the haze instead of ending on a hard seam */
-#smell::before { mask-image: linear-gradient(90deg, #000 50%, transparent); }
+#smell::before { -webkit-mask-image: linear-gradient(90deg, #000 50%, transparent); mask-image: linear-gradient(90deg, #000 50%, transparent); }
 
 #smell h2 {
     margin-left: 0;
@@ -635,6 +641,7 @@ section {
 
 #smell .fog {
     overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, transparent 22%, #000 42%, #000 70%, transparent 88%);
     mask-image: linear-gradient(180deg, transparent 22%, #000 42%, #000 70%, transparent 88%);
 }
 
@@ -727,6 +734,7 @@ section {
     background:
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.16' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.86 0 0 0 0 0.93 0 0 0 0 1 9 0 0 0 -5.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E") 0 0 / 400px,
         radial-gradient(ellipse at center, transparent 50%, rgba(190, 216, 240, 0.2));
+    -webkit-mask-image: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.35) 82%, #000 100%);
     mask-image: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.35) 82%, #000 100%);
     opacity: 0.7;
 }
@@ -795,6 +803,12 @@ section {
 #taste .aurora {
     overflow: hidden;
     mix-blend-mode: screen;   /* deep color adds light, never grey */
+    -webkit-mask-image: linear-gradient(180deg,
+        #000 0%,
+        rgba(0, 0, 0, 0.45) 34%,
+        rgba(0, 0, 0, 0.45) 56%,   /* the quote's band: half strength */
+        #000 72%,
+        transparent 92%);
     mask-image: linear-gradient(180deg,
         #000 0%,
         rgba(0, 0, 0, 0.45) 34%,
@@ -830,12 +844,12 @@ section {
         justify-content: flex-end;
     }
 
-    #smell::before { mask-image: linear-gradient(180deg, #000 50%, transparent); }
+    #smell::before { -webkit-mask-image: linear-gradient(180deg, #000 50%, transparent); mask-image: linear-gradient(180deg, #000 50%, transparent); }
 
     #smell p { max-width: 40ch; }
 
     /* the label + quote sit low here, so the fog rolls over the photo */
-    #smell .fog { mask-image: linear-gradient(180deg, transparent 6%, #000 22%, #000 46%, transparent 60%); }
+    #smell .fog { -webkit-mask-image: linear-gradient(180deg, transparent 6%, #000 22%, #000 46%, transparent 60%); mask-image: linear-gradient(180deg, transparent 6%, #000 22%, #000 46%, transparent 60%); }
 }
 
 /* =========================================================
@@ -1092,6 +1106,7 @@ body::before {
    rather than stars */
 #hero .fireflies {
     z-index: 6;
+    -webkit-mask-image: linear-gradient(180deg, transparent 34%, #000 58%);
     mask-image: linear-gradient(180deg, transparent 34%, #000 58%);
 }
 
@@ -1128,13 +1143,14 @@ html {
 
 ::-webkit-scrollbar-thumb {
     background: rgba(224, 168, 79, 0.55);
+    -webkit-background-clip: content-box;
     background-clip: content-box;
     border: 3px solid transparent;
     border-radius: 99px;
     transition: background-color 0.3s ease;
 }
 
-::-webkit-scrollbar-thumb:hover { background: rgba(230, 182, 104, 0.9); background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(230, 182, 104, 0.9); -webkit-background-clip: content-box; background-clip: content-box; }
 
 ::-webkit-scrollbar-corner { background: transparent; }
 
