@@ -68,13 +68,15 @@ section {
 
 #definition,
 #original-example,
-#real-world-example {
+#real-world-example,
+#explanation {
     background: var(--ink);
 }
 
 #definition > *,
 #original-example > *,
-#real-world-example > * {
+#real-world-example > *,
+#explanation > * {
     width: 100%;
     max-width: 38rem;   /* Cartier restraint: one calm column */
     margin-inline: auto;
@@ -82,7 +84,8 @@ section {
 
 #definition h2,
 #original-example h2,
-#real-world-example h2 {
+#real-world-example h2,
+#explanation h2 {
     font-family: var(--serif);
     font-weight: 400;
     font-size: clamp(1.9rem, 1.2rem + 3vw, 3.4rem);
@@ -94,7 +97,8 @@ section {
 /* thin gold rule above each teaching heading = "information" marker */
 #definition h2::before,
 #original-example h2::before,
-#real-world-example h2::before {
+#real-world-example h2::before,
+#explanation h2::before {
     content: "";
     display: block;
     width: 3rem;
@@ -103,10 +107,13 @@ section {
     margin-bottom: 1.5rem;
 }
 
-#definition p {
+#definition p,
+#explanation p {
     font-size: clamp(1.15rem, 1rem + 0.6vw, 1.45rem);
     color: var(--paper);
 }
+
+#explanation p + p { margin-top: 1.5rem; }
 
 /* ORIGINAL — "mine": the zoom-out moment, blended dusk palette,
    writing is the star */
@@ -979,21 +986,56 @@ section {
     z-index: 1000;
     display: grid;
     place-items: center;
-    background: var(--ink-deep);
+    /* a breath of gold light under the word, over deep ink: the dusk the
+       walk opens on, before the panel wipes up to hand you the hero */
+    background:
+        radial-gradient(130% 90% at 50% 44%, rgba(224, 168, 79, 0.07), transparent 62%),
+        var(--ink-deep);
     pointer-events: none;   /* never intercepts a click */
+    --p: 0;                 /* load fraction 0..1, set by the <head> script */
 }
 
+/* the word fills left-to-right from dim to bright as the page loads, so it
+   lands as the same bright "imagery" the hero opens on. The gold dot stays lit
+   the whole time. (-webkit- prefix: Safari still needs it for clip:text.) */
 #loader .brand {
     font-family: var(--display);
     font-weight: 300;
     font-size: clamp(2.75rem, 9vw, 7rem);
     letter-spacing: 0.01em;
-    color: var(--paper);
+    background: linear-gradient(90deg,
+        var(--paper) calc(var(--p) * 100%), var(--paper-dim) 0);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
 }
 
 #loader .brand i {
     font-style: normal;
+    -webkit-text-fill-color: var(--accent);
     color: var(--accent);
+}
+
+/* a glowing hairline fills across the foot of the screen, in step with --p */
+#loader .bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: rgba(224, 168, 79, 0.14);   /* the faint track */
+    overflow: hidden;
+}
+
+#loader .bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: scaleX(var(--p));
+    transform-origin: left;
+    background: var(--accent);
+    box-shadow: 0 0 14px 1px rgba(224, 168, 79, 0.65);
 }
 
 #loader .pct {

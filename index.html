@@ -23,8 +23,10 @@
             const tick = () => {
                 const target = loaded ? 100 : 90;
                 pct += Math.max(0.6, (target - pct) * 0.07);   // ease in, slows near the target
+                loader.style.setProperty("--p", (Math.min(pct, 100) / 100).toFixed(3));   // drives the word-fill + the bar
                 if (pct >= 100) {
                     pctEl.textContent = 100;
+                    loader.style.setProperty("--p", 1);
                     loader.classList.add("done");
                     return;
                 }
@@ -558,6 +560,7 @@
     <div id="loader" aria-hidden="true">
         <span class="brand">imagery<i>.</i></span>
         <span class="pct">0</span>
+        <span class="bar"></span>
     </div>
 
     <!-- SECTION 1: HERO -->
@@ -577,7 +580,7 @@
         <ul class="facts">
             <li><b>5</b> senses <br>to wake</li>
             <li><b>1</b> trail <br>at dusk</li>
-            <li><b>6</b> stops <br>on the walk</li>
+            <li><b>7</b> stops <br>on the walk</li>
         </ul>
         <a class="scroll-cue" href="#definition"><span aria-hidden="true">↓</span> step inside</a>
         <canvas class="fireflies" aria-hidden="true"></canvas>
@@ -653,7 +656,14 @@
         <p class="analysis">Frost leans on sound and touch: the near-silence of the woods and the softness of falling snow. You don’t just picture the scene, you feel how still it is.</p>
     </section>
 
-    <!-- SECTION 6: CLOSING -->
+    <!-- SECTION 6: EXPLANATION — why the device matters (also submitted separately) -->
+    <section id="explanation">
+        <h2>WHY IMAGERY MATTERS</h2>
+        <p>I built my project as a walk through a forest at dusk because that is the best way to show what imagery actually does. Good imagery doesn’t just tell you there is a forest. It gives you the gold light through the branches, the branch settling behind you, the pine in the cold air, so the place assembles itself in your head and you feel like you are standing in it.</p>
+        <p>That is why imagery matters in writing: it convinces the senses, and the senses convince the reader. It also makes writing stick, because we hold on to things we feel far longer than things we are simply told. When a writer makes you feel cold or quiet or afraid, they are no longer describing an emotion to you, they are giving it to you directly, and that lets a reader step into a moment that was never their own. That is how imagery carries meaning and emotion that plain description can’t reach.</p>
+    </section>
+
+    <!-- SECTION 7: CLOSING -->
     <section id="closing">
         <h2>That’s imagery. Not describing a place, but letting you stand in it.</h2>
         <p class="credit">Cruz · ID PM · October 8, 2026</p>
